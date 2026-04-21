@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import config from '../config'
+import api from '../api'
 
 function PatientItem({ patient, onClick }) {
   return (
@@ -35,7 +35,7 @@ function Patients() {
 
   const fetchPatients = async () => {
     try {
-      const res = await fetch(`${config.BASE_URL}/api/patients`)
+      const res = await api.get('/api/patients')
       if (!res.ok) throw new Error('Failed to fetch')
       const data = await res.json()
       setPatients(Array.isArray(data) ? data : [])
@@ -53,11 +53,7 @@ function Patients() {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`${config.BASE_URL}/api/patients`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName, dateOfBirth, note }),
-      })
+      const res = await api.post('/api/patients', { fullName, dateOfBirth, note })
       if (!res.ok) {
         const text = await res.text()
         throw new Error(`Server error: ${text}`)

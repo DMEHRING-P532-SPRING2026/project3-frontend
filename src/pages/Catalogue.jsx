@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import config from '../config'
+import api from '../api'
 
 function Catalogue() {
     const [phenomenonTypes, setPhenomenonTypes] = useState([])
     const [protocols, setProtocols] = useState([])
+    const [associativeFunctions, setAssociativeFunctions] = useState([])
+    const [phenomena, setPhenomena] = useState([])
     const [activeSection, setActiveSection] = useState('phenomenonTypes')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
@@ -13,6 +15,13 @@ function Catalogue() {
     const [ptKind, setPtKind] = useState('QUANTITATIVE')
     const [ptAllowedUnits, setPtAllowedUnits] = useState('')
     const [ptPhenomena, setPtPhenomena] = useState('')
+    const [ptNormalMin, setPtNormalMin] = useState('')
+    const [ptNormalMax, setPtNormalMax] = useState('')
+
+    // phenomenon form
+    const [phName, setPhName] = useState('')
+    const [phPhenomenonTypeId, setPhPhenomenonTypeId] = useState('')
+    const [phParentConceptId, setPhParentConceptId] = useState('')
 
     // protocol form
     const [prName, setPrName] = useState('')
@@ -21,7 +30,7 @@ function Catalogue() {
 
     const fetchPhenomenonTypes = async () => {
         try {
-            const res = await fetch(`${config.BASE_URL}/api/phenomenon-types`)
+            const res = await api.get('/api/phenomenon-types')
             const data = await res.json()
             setPhenomenonTypes(Array.isArray(data) ? data : [])
         } catch (err) {
@@ -29,9 +38,19 @@ function Catalogue() {
         }
     }
 
+    const fetchPhenomena = async () => {
+        try {
+            const res = await api.get('/api/phenomena')
+            const data = await res.json()
+            setPhenomena(Array.isArray(data) ? data : [])
+        } catch (err) {
+            console.error('Failed to load phenomena', err)
+        }
+    }
+
     const fetchProtocols = async () => {
         try {
-            const res = await fetch(`${config.BASE_URL}/api/protocols`)
+            const res = await api.get('/api/protocols')
             const data = await res.json()
             setProtocols(Array.isArray(data) ? data : [])
         } catch (err) {
@@ -39,9 +58,21 @@ function Catalogue() {
         }
     }
 
+    const fetchAssociativeFunctions = async () => {
+        try {
+            const res = await api.get('/api/associative-function')
+            const data = await res.json()
+            setAssociativeFunctions(Array.isArray(data) ? data : [])
+        } catch (err) {
+            console.error('Failed to load associative functions', err)
+        }
+    }
+
     useEffect(() => {
         fetchPhenomenonTypes()
+        fetchPhenomena()
         fetchProtocols()
+        fetchAssociativeFunctions()
     }, [])
 
     const handlePhenomenonTypeSubmit = async (e) => {
@@ -49,25 +80,49 @@ function Catalogue() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch(`${config.BASE_URL}/api/phenomenon-types`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: ptName,
-                    kind: ptKind,
-                    allowedUnits: ptKind === 'QUANTITATIVE'
-                        ? ptAllowedUnits.split(',').map(u => u.trim()).filter(Boolean)
-                        : [],
-                    phenomena: ptKind === 'QUALITATIVE'
-                        ? ptPhenomena.split(',').map(p => p.trim()).filter(Boolean)
-                        : [],
-                }),
+            const res = await api.post('/api/phenomenon-types', {
+                name: ptName,
+                kind: ptKind,
+                allowedUnits: ptKind === 'QUANTITATIVE'
+                    ? ptAllowedUnits.split(',').map(u => u.trim()).filter(Boolean)
+                    : [],
+                phenomena: ptKind === 'QUALITATIVE'
+                    ? ptPhenomena.split(',').map(p => p.trim()).filter(Boolean)
+                    : [],
+                normalMin: ptNormalMin !== '' ? parseFloat(ptNormalMin) : null,
+                normalMax: ptNormalMax !== '' ? parseFloat(ptNormalMax) : null,
             })
             if (!res.ok) throw new Error(await res.text())
             setPtName('')
             setPtAllowedUnits('')
             setPtPhenomena('')
             setPtKind('QUANTITATIVE')
+            setPtNormalMin('')
+            setPtNormalMax('')
+            fetchPhenomenonTypes()
+            fetchPhenomena()
+        } catch (err) {
+            setError(err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handlePhenomenonSubmit = async (e) => {
+        e.preventDefault()
+        setLoading(true)
+        setError('')
+        try {
+            const res = await api.post('/api/phenomena', {
+                name: phName,
+                phenomenonTypeId: parseInt(phPhenomenonTypeId),
+                parentConceptId: phParentConceptId !== '' ? parseInt(phParentConceptId) : null,
+            })
+            if (!res.ok) throw new Error(await res.text())
+            setPhName('')
+            setPhPhenomenonTypeId('')
+            setPhParentConceptId('')
+            fetchPhenomena()
             fetchPhenomenonTypes()
         } catch (err) {
             setError(err.message)
@@ -81,14 +136,10 @@ function Catalogue() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch(`${config.BASE_URL}/api/protocols`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: prName,
-                    description: prDescription,
-                    accuracyRating: prAccuracyRating,
-                }),
+            const res = await api.post('/api/protocols', {
+                name: prName,
+                description: prDescription,
+                accuracyRating: prAccuracyRating,
             })
             if (!res.ok) throw new Error(await res.text())
             setPrName('')
@@ -104,7 +155,7 @@ function Catalogue() {
 
     const handleDeletePhenomenonType = async (id) => {
         try {
-            await fetch(`${config.BASE_URL}/api/phenomenon-types/${id}`, { method: 'DELETE' })
+            await api.delete(`/api/phenomenon-types/${id}`)
             fetchPhenomenonTypes()
         } catch (err) {
             console.error('Failed to delete phenomenon type', err)
@@ -113,10 +164,22 @@ function Catalogue() {
 
     const handleDeleteProtocol = async (id) => {
         try {
-            await fetch(`${config.BASE_URL}/api/protocols/${id}`, { method: 'DELETE' })
+            await api.delete(`/api/protocols/${id}`)
             fetchProtocols()
         } catch (err) {
             console.error('Failed to delete protocol', err)
+        }
+    }
+
+    const handleStrategyChange = async (id, strategyType) => {
+        try {
+            const res = await api.patch(`/api/associative-function/${id}/strategy`, {
+                diagnosisStrategyType: strategyType,
+            })
+            if (!res.ok) throw new Error(await res.text())
+            fetchAssociativeFunctions()
+        } catch (err) {
+            console.error('Failed to update strategy', err)
         }
     }
 
@@ -126,13 +189,23 @@ function Catalogue() {
         LOW: 'bg-red-800 text-red-200',
     }
 
+    const strategyColors = {
+        CONJUNCTIVE: 'bg-blue-800 text-blue-200',
+        WEIGHTED: 'bg-purple-800 text-purple-200',
+    }
+
+    // phenomena available as parents for the selected phenomenon type
+    const availableParents = phenomena.filter(
+        p => phPhenomenonTypeId === '' || p.phenomenonTypeId === parseInt(phPhenomenonTypeId)
+    )
+
     return (
         <div className="grid grid-cols-3 w-full h-full gap-8 px-8 py-8 bg-neutral-800 overflow-hidden">
 
             {/* List panel */}
             <div className="col-span-2 bg-neutral-600 rounded overflow-hidden flex flex-col min-h-0">
                 <div className="bg-neutral-700 px-4 py-3 border-b border-neutral-500 flex items-center gap-2">
-                    {['phenomenonTypes', 'protocols'].map(s => (
+                    {['phenomenonTypes', 'protocols', 'associativeFunctions'].map(s => (
                         <button
                             key={s}
                             onClick={() => { setActiveSection(s); setError('') }}
@@ -142,14 +215,15 @@ function Catalogue() {
                                     : 'bg-neutral-600 text-neutral-300 hover:bg-neutral-500'
                             }`}
                         >
-                            {s === 'phenomenonTypes' ? 'Phenomenon Types' : 'Protocols'}
+                            {s === 'phenomenonTypes' ? 'Phenomenon Types'
+                                : s === 'protocols' ? 'Protocols'
+                                : 'Rules'}
                         </button>
                     ))}
                 </div>
 
                 <div className="overflow-y-auto flex-1 min-h-0 p-4 flex flex-col gap-2">
 
-                    {/* Phenomenon Types list */}
                     {activeSection === 'phenomenonTypes' && (
                         phenomenonTypes.length === 0
                             ? <p className="text-neutral-400 p-2">No phenomenon types found</p>
@@ -170,20 +244,22 @@ function Catalogue() {
                                         </button>
                                     </div>
                                     {pt.kind === 'QUANTITATIVE' && pt.allowedUnits?.length > 0 && (
-                                        <p className="text-neutral-400 text-xs">
-                                            Units: {pt.allowedUnits.join(', ')}
-                                        </p>
+                                        <p className="text-neutral-400 text-xs">Units: {pt.allowedUnits.join(', ')}</p>
                                     )}
                                     {pt.kind === 'QUALITATIVE' && pt.phenomena?.length > 0 && (
                                         <p className="text-neutral-400 text-xs">
                                             Phenomena: {pt.phenomena.map(p => p.name).join(', ')}
                                         </p>
                                     )}
+                                    {(pt.normalMin != null || pt.normalMax != null) && (
+                                        <p className="text-neutral-400 text-xs">
+                                            Normal range: {pt.normalMin ?? '—'} – {pt.normalMax ?? '—'}
+                                        </p>
+                                    )}
                                 </div>
                             ))
                     )}
 
-                    {/* Protocols list */}
                     {activeSection === 'protocols' && (
                         protocols.length === 0
                             ? <p className="text-neutral-400 p-2">No protocols found</p>
@@ -208,6 +284,36 @@ function Catalogue() {
                             ))
                     )}
 
+                    {activeSection === 'associativeFunctions' && (
+                        associativeFunctions.length === 0
+                            ? <p className="text-neutral-400 p-2">No rules found</p>
+                            : associativeFunctions.map(af => (
+                                <div key={af.id} className="bg-neutral-700 rounded border border-neutral-500 p-3 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <h1 className="text-white font-bold text-base">{af.name}</h1>
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${strategyColors[af.diagnosisStrategyType] ?? 'bg-neutral-600 text-neutral-200'}`}>
+                                                {af.diagnosisStrategyType}
+                                            </span>
+                                        </div>
+                                        <select
+                                            value={af.diagnosisStrategyType ?? ''}
+                                            onChange={(e) => handleStrategyChange(af.id, e.target.value)}
+                                            className="text-xs px-2 py-1 rounded bg-neutral-600 text-white border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                                        >
+                                            <option value="CONJUNCTIVE">CONJUNCTIVE</option>
+                                            <option value="WEIGHTED">WEIGHTED</option>
+                                        </select>
+                                    </div>
+                                    <p className="text-neutral-400 text-xs">
+                                        Arguments: {af.argumentConceptNames?.join(', ')}
+                                    </p>
+                                    <p className="text-neutral-400 text-xs">
+                                        Infers: <span className="text-white">{af.productConceptName}</span>
+                                    </p>
+                                </div>
+                            ))
+                    )}
                 </div>
             </div>
 
@@ -269,6 +375,29 @@ function Catalogue() {
                                 <p className="text-neutral-400 text-xs mt-1">Comma separated</p>
                             </div>
                         )}
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <label className="block text-white text-sm font-bold mb-1">Normal Min</label>
+                                <input
+                                    type="number"
+                                    value={ptNormalMin}
+                                    onChange={(e) => setPtNormalMin(e.target.value)}
+                                    placeholder="e.g. 36.5"
+                                    className="w-full px-3 py-2 rounded-md bg-neutral-700 text-white placeholder-neutral-400 border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-white text-sm font-bold mb-1">Normal Max</label>
+                                <input
+                                    type="number"
+                                    value={ptNormalMax}
+                                    onChange={(e) => setPtNormalMax(e.target.value)}
+                                    placeholder="e.g. 37.5"
+                                    className="w-full px-3 py-2 rounded-md bg-neutral-700 text-white placeholder-neutral-400 border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                                />
+                            </div>
+                        </div>
+                        <p className="text-neutral-400 text-xs">Normal range is optional — leave blank to skip anomaly checking</p>
                         {error && activeSection === 'phenomenonTypes' && (
                             <p className="text-red-400 text-sm">{error}</p>
                         )}
@@ -278,6 +407,62 @@ function Catalogue() {
                             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:opacity-50"
                         >
                             {loading ? 'Creating...' : 'Create Phenomenon Type'}
+                        </button>
+                    </form>
+                </div>
+
+                {/* New Phenomenon */}
+                <div className="bg-neutral-600 rounded overflow-hidden">
+                    <div className="bg-neutral-700 px-4 py-3 border-b border-neutral-500">
+                        <h1 className="text-white font-bold text-2xl tracking-wide">New Phenomenon</h1>
+                    </div>
+                    <form onSubmit={handlePhenomenonSubmit} className="p-4 space-y-3">
+                        <div>
+                            <label className="block text-white text-sm font-bold mb-1">Name</label>
+                            <input
+                                type="text"
+                                value={phName}
+                                onChange={(e) => setPhName(e.target.value)}
+                                className="w-full px-3 py-2 rounded-md bg-neutral-700 text-white border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-white text-sm font-bold mb-1">Phenomenon Type</label>
+                            <select
+                                value={phPhenomenonTypeId}
+                                onChange={(e) => { setPhPhenomenonTypeId(e.target.value); setPhParentConceptId('') }}
+                                className="w-full px-3 py-2 rounded-md bg-neutral-700 text-white border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                                required
+                            >
+                                <option value="">Select...</option>
+                                {phenomenonTypes.filter(pt => pt.kind === 'QUALITATIVE').map(pt => (
+                                    <option key={pt.id} value={pt.id}>{pt.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-white text-sm font-bold mb-1">Parent Concept (optional)</label>
+                            <select
+                                value={phParentConceptId}
+                                onChange={(e) => setPhParentConceptId(e.target.value)}
+                                className="w-full px-3 py-2 rounded-md bg-neutral-700 text-white border border-neutral-500 focus:outline-none focus:border-neutral-300"
+                            >
+                                <option value="">None</option>
+                                {availableParents.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {error && activeSection === 'phenomenonTypes' && (
+                            <p className="text-red-400 text-sm">{error}</p>
+                        )}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded disabled:opacity-50"
+                        >
+                            {loading ? 'Creating...' : 'Create Phenomenon'}
                         </button>
                     </form>
                 </div>

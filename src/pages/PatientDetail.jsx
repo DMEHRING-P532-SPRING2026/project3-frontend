@@ -1,14 +1,27 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import config from '../config'
+import api from '../api'
 
 function ObservationItem({ observation, onReject }) {
     const isRejected = observation.status === 'REJECTED'
+    const isInferred = observation.source === 'INFERRED'
+
     return (
-        <div className={`grid grid-cols-4 rounded text-white border ${isRejected ? 'bg-neutral-700 border-neutral-600 opacity-60' : 'bg-neutral-600 border-neutral-500'}`}>
+        <div className={`grid grid-cols-4 rounded text-white border ${
+            isRejected ? 'bg-neutral-700 border-neutral-600 opacity-60' 
+            : isInferred ? 'bg-neutral-700 border-neutral-500 border-dashed italic opacity-80'
+            : 'bg-neutral-600 border-neutral-500'
+        }`}>
             <div className="p-3 border-r border-white/20">
                 <p className="text-neutral-400 text-xs uppercase tracking-wide mb-0.5">Type</p>
-                <h1 className="font-bold text-sm capitalize">{observation.type}</h1>
+                <div className="flex items-center gap-1">
+                    <h1 className="font-bold text-sm capitalize">{observation.type}</h1>
+                    {isInferred && (
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-purple-800 text-purple-200 not-italic">
+                            INFERRED
+                        </span>
+                    )}
+                </div>
                 <p className="text-xs text-neutral-400 mt-1">{observation.phenomenonTypeName}</p>
             </div>
             <div className="p-3 border-r border-white/20">
@@ -33,11 +46,19 @@ function ObservationItem({ observation, onReject }) {
                     <span className={`text-xs font-bold px-2 py-0.5 rounded ${isRejected ? 'bg-red-800 text-red-200' : 'bg-green-800 text-green-200'}`}>
                         {observation.status}
                     </span>
+                    {observation.flag && (
+                        <span className="ml-1 text-xs font-bold px-2 py-0.5 rounded bg-amber-800 text-amber-200">
+                            {observation.flag}
+                        </span>
+                    )}
                     {observation.protocolName && (
                         <p className="text-xs text-neutral-400 mt-1">{observation.protocolName}</p>
                     )}
+                    {observation.performedBy && (
+                        <p className="text-xs text-neutral-400 mt-1">By: {observation.performedBy}</p>
+                    )}
                 </div>
-                {!isRejected && (
+                {!isRejected && !isInferred && (
                     <button
                         onClick={() => onReject(observation.id)}
                         className="self-start text-xs text-red-400 hover:text-red-300 transition-colors mt-2"
@@ -86,7 +107,7 @@ function PatientDetail() {
 
     const fetchObservations = async () => {
         try {
-            const res = await fetch(`${config.BASE_URL}/api/patients/${id}/observations`)
+            const res = await api.get(`/api/patients/${id}/observations`)
             if (!res.ok) throw new Error('Failed to fetch observations')
             const data = await res.json()
             setObservations(Array.isArray(data) ? data : [])
@@ -98,7 +119,7 @@ function PatientDetail() {
     useEffect(() => {
         const fetchPhenomenonTypes = async () => {
             try {
-                const res = await fetch(`${config.BASE_URL}/api/phenomenon-types`)
+                const res = await api.get('/api/phenomenon-types')
                 const data = await res.json()
                 setPhenomenonTypes(Array.isArray(data) ? data : [])
             } catch (err) {
@@ -108,7 +129,7 @@ function PatientDetail() {
 
         const fetchProtocols = async () => {
             try {
-                const res = await fetch(`${config.BASE_URL}/api/protocols`)
+                const res = await api.get('/api/protocols')
                 const data = await res.json()
                 setProtocols(Array.isArray(data) ? data : [])
             } catch (err) {
@@ -126,17 +147,13 @@ function PatientDetail() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch(`${config.BASE_URL}/api/observations/measurement`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    patientId: parseInt(id),
-                    phenomenonTypeId: parseInt(phenomenonTypeId),
-                    amount: parseFloat(amount),
-                    unit,
-                    protocolId: protocolId ? parseInt(protocolId) : null,
-                    applicableAt: new Date(applicableAt).toISOString(),
-                }),
+            const res = await api.post('/api/observations/measurement', {
+                patientId: parseInt(id),
+                phenomenonTypeId: parseInt(phenomenonTypeId),
+                amount: parseFloat(amount),
+                unit,
+                protocolId: protocolId ? parseInt(protocolId) : null,
+                applicableAt: new Date(applicableAt).toISOString(),
             })
             if (!res.ok) throw new Error(await res.text())
             setActiveForm(null)
@@ -158,16 +175,12 @@ function PatientDetail() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch(`${config.BASE_URL}/api/observations/category`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    patientId: parseInt(id),
-                    phenomenonId: parseInt(phenomenonId),
-                    presence,
-                    protocolId: catProtocolId ? parseInt(catProtocolId) : null,
-                    applicableAt: new Date(catApplicableAt).toISOString(),
-                }),
+            const res = await api.post('/api/observations/category', {
+                patientId: parseInt(id),
+                phenomenonId: parseInt(phenomenonId),
+                presence,
+                protocolId: catProtocolId ? parseInt(catProtocolId) : null,
+                applicableAt: new Date(catApplicableAt).toISOString(),
             })
             if (!res.ok) throw new Error(await res.text())
             setActiveForm(null)
@@ -189,13 +202,9 @@ function PatientDetail() {
         setLoading(true)
         setError('')
         try {
-            const res = await fetch(`${config.BASE_URL}/api/observations/${rejectId}/reject`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reason: rejectReason,
-                    rejectedById: rejectedById ? parseInt(rejectedById) : null,
-                }),
+            const res = await api.post(`/api/observations/${rejectId}/reject`, {
+                reason: rejectReason,
+                rejectedById: rejectedById ? parseInt(rejectedById) : null,
             })
             if (!res.ok) throw new Error(await res.text())
             setActiveForm(null)
@@ -212,9 +221,7 @@ function PatientDetail() {
 
     const handleEvaluate = async () => {
         try {
-            const res = await fetch(`${config.BASE_URL}/api/patients/${id}/evaluate`, {
-                method: 'POST',
-            })
+            const res = await api.post(`/api/patients/${id}/evaluate`)
             const data = await res.json()
             setInferences(Array.isArray(data) ? data : [])
         } catch (err) {
@@ -249,12 +256,22 @@ function PatientDetail() {
                 </div>
 
                 {inferences.length > 0 && (
-                    <div className="bg-blue-900 border-b border-blue-700 px-4 py-2 flex items-center gap-3">
-                        <span className="text-blue-300 text-sm font-bold">Inferred:</span>
-                        {inferences.map((name, i) => (
-                            <span key={i} className="bg-blue-700 text-blue-100 text-xs px-2 py-0.5 rounded">
-                                {name}
-                            </span>
+                    <div className="bg-blue-950 border-b border-blue-800 px-4 py-3 flex flex-col gap-2">
+                        <span className="text-blue-300 text-sm font-bold">Inferred Diagnoses</span>
+                        {inferences.map((inference, i) => (
+                            <div key={i} className="bg-blue-900 rounded border border-blue-700 p-2 flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-white text-sm font-bold">{inference.inferredConcept}</span>
+                                    <span className="text-xs px-2 py-0.5 rounded bg-blue-700 text-blue-200">
+                                        {inference.strategyUsed}
+                                    </span>
+                                </div>
+                                {inference.evidenceObservationIds?.length > 0 && (
+                                    <p className="text-blue-300 text-xs">
+                                        Evidence: obs {inference.evidenceObservationIds.join(', ')}
+                                    </p>
+                                )}
+                            </div>
                         ))}
                     </div>
                 )}

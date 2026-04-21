@@ -1,24 +1,26 @@
 import { useState, useEffect } from 'react'
-import config from '../config'
+import api from '../api'
 
 function Logs() {
     const [commandLog, setCommandLog] = useState([])
     const [auditLog, setAuditLog] = useState([])
 
-    useEffect(() => {
-        const fetchCommandLog = async () => {
-            try {
-                const res = await fetch(`${config.BASE_URL}/api/command-log`)
-                const data = await res.json()
-                setCommandLog(Array.isArray(data) ? data : [])
-            } catch (err) {
-                console.error('Failed to load command log', err)
-            }
+    const fetchCommandLog = async () => {
+        try {
+            const res = await api.get('/api/command-log')
+            if (!res.ok) throw new Error('Failed to fetch')
+            const data = await res.json()
+            setCommandLog(Array.isArray(data) ? data : [])
+        } catch (err) {
+            console.error('Failed to load command log', err)
         }
+    }
 
+    useEffect(() => {
         const fetchAuditLog = async () => {
             try {
-                const res = await fetch(`${config.BASE_URL}/api/audit-log`)
+                const res = await api.get('/api/audit-log')
+                if (!res.ok) throw new Error('Failed to fetch')
                 const data = await res.json()
                 setAuditLog(Array.isArray(data) ? data : [])
             } catch (err) {
@@ -29,6 +31,22 @@ function Logs() {
         fetchCommandLog()
         fetchAuditLog()
     }, [])
+
+    const handleUndo = async (id) => {
+        try {
+            const res = await api.post(`/api/command-log/${id}/undo`)
+            if (!res.ok) {
+                const text = await res.text()
+                alert(`Undo failed: ${text}`)
+                return
+            }
+            fetchCommandLog()
+        } catch (err) {
+            console.error('Failed to undo command', err)
+        }
+    }
+
+    const undoableTypes = ['CREATE_OBSERVATION', 'REJECT_OBSERVATION']
 
     return (
         <div className="grid grid-cols-2 w-full h-full gap-8 px-8 py-8 bg-neutral-800 overflow-hidden">
@@ -44,15 +62,22 @@ function Logs() {
                         : commandLog.map(entry => (
                             <div key={entry.id} className="bg-neutral-700 rounded border border-neutral-500 p-3 flex flex-col gap-1">
                                 <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-800 text-blue-200">
-                                        {entry.commandType}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded bg-blue-800 text-blue-200">
+                                            {entry.commandType}
+                                        </span>
+                                        {entry.undone && (
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded bg-neutral-600 text-neutral-300">
+                                                UNDONE
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className="text-neutral-400 text-xs">
                                         {new Date(entry.executedAt).toLocaleString()}
                                     </span>
                                 </div>
                                 <p className="text-neutral-300 text-xs">
-                                    User: <span className="text-white">{entry.user}</span>
+                                    User: <span className="text-white">{entry.user?.username ?? entry.user}</span>
                                 </p>
                                 <details className="mt-1">
                                     <summary className="text-neutral-400 text-xs cursor-pointer hover:text-white transition-colors">
@@ -68,6 +93,14 @@ function Logs() {
                                         })()}
                                     </pre>
                                 </details>
+                                    {!entry.undone && (
+                                        <button
+                                            onClick={() => handleUndo(entry.id)}
+                                            className="self-start text-xs text-amber-400 hover:text-amber-300 transition-colors mt-1"
+                                        >
+                                            Undo
+                                        </button>
+                                    )}
                             </div>
                         ))
                     }
